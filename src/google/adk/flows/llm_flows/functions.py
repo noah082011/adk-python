@@ -657,6 +657,10 @@ async def handle_function_calls_live(
           response_event_id=merged_event.id,
           function_response_event=merged_event,
       )
+  # Preserve the originating function call event ID on the response so that
+  # history reconstruction can handle live session events gracefully when the
+  # function call has been converted to text (e.g. via transparent resumption).
+  merged_event.live_session_id = function_call_event.id
   return merged_event
 
 
@@ -1196,6 +1200,7 @@ def merge_parallel_function_response_events(
       branch=base_event.branch,
       content=types.Content(role='user', parts=merged_parts),
       actions=merged_actions,  # Optionally merge actions if required
+      live_session_id=base_event.live_session_id,
   )
 
   # Use the base_event as the timestamp

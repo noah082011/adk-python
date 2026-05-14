@@ -552,6 +552,66 @@ async def test_function_rearrangement_preserves_other_content():
 
 
 @pytest.mark.asyncio
+async def test_live_tool_response_reconstruction_succeeds():
+  """Regression test for issue #5702: live function responses must not raise.
+
+  When the latest persisted event is a live tool response whose matching
+  function call has been converted to text (e.g. because it belongs to a
+  different agent in a multi-agent setup), history reconstruction must
+  succeed gracefully instead of raising ValueError.
+  """
+  # "sub_agent" generated the function call; "test_agent" is the current agent.
+  # From test_agent's perspective sub_agent's event is an "other agent reply"
+  # and will be converted to plain text by _present_other_agent_message.
+  # The function response is authored by test_agent so it stays structured.
+  function_call = types.FunctionCall(
+      id='live_call_001', name='search_tool', args={'query': 'hello'}
+  )
+  function_response = types.FunctionResponse(
+      id='live_call_001',
+      name='search_tool',
+      response={'result': 'world'},
+  )
+
+  fc_event = Event(
+      invocation_id='inv1',
+      author='sub_agent',
+      content=types.ModelContent([types.Part(function_call=function_call)]),
+  )
+
+  # Simulate what handle_function_calls_live sets: live_session_id = fc_event.id
+  fr_event = Event(
+      invocation_id='inv1',
+      author='test_agent',
+      content=types.UserContent(
+          [types.Part(function_response=function_response)]
+      ),
+      live_session_id=fc_event.id,
+  )
+
+  agent = Agent(model='gemini-2.5-flash', name='test_agent')
+  llm_request = LlmRequest(model='gemini-2.5-flash')
+  invocation_context = await testing_utils.create_invocation_context(
+      agent=agent
+  )
+  invocation_context.session.events = [
+      Event(
+          invocation_id='inv0',
+          author='user',
+          content=types.UserContent('Hello'),
+      ),
+      fc_event,
+      fr_event,
+  ]
+
+  # Should NOT raise "No function call event found"
+  async for _ in contents.request_processor.run_async(
+      invocation_context, llm_request
+  ):
+    pass
+
+
+@pytest.mark.asyncio
 async def test_error_when_function_response_without_matching_call():
   """Test error when function response has no matching function call."""
   agent = Agent(model="gemini-2.5-flash", name="test_agent")

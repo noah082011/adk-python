@@ -67,6 +67,15 @@ class Event(LlmResponse):
   conversation history.
   """
 
+  live_session_id: Optional[str] = None
+  """The ID of the function call event that originated this function response.
+
+  Set on function response events generated during live mode to link them to
+  their originating function call event. Used by history reconstruction to
+  handle live session events gracefully when the original function call may
+  have been converted to text (e.g. via session resumption).
+  """
+
   # The following are computed fields.
   # Do not assign the ID. It will be assigned by the session.
   id: str = ''

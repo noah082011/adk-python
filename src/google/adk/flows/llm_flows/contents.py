@@ -196,6 +196,20 @@ def _rearrange_events_for_latest_function_response(
           break
 
   if function_call_event_idx == -1:
+    # For live session function responses the originating function call may
+    # have been converted to text (e.g. when it belongs to another agent in a
+    # multi-agent setup, or after transparent session resumption). In that
+    # case live_session_id is set on the response event to signal that the
+    # pairing cannot be found in the current structured history but is still
+    # valid. Return the events as-is so the live model can continue normally.
+    if events[-1].live_session_id:
+      logger.debug(
+          'No function call event found for live session function responses'
+          ' ids: %s. Returning events as-is; function call may exist in'
+          ' model context via session resumption.',
+          function_responses_ids,
+      )
+      return events
     logger.debug(
         'No function call event found for function responses ids: %s in'
         ' event list: %s',
